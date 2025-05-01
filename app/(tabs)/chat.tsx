@@ -138,8 +138,6 @@ export default function ChatScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  console.log("isAtBottom", isAtBottom);
-
   const handleSendMessage = () => {
     const newMessage = {
       role: "user",
