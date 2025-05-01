@@ -1,5 +1,6 @@
 import {
   FlatList,
+  RefreshControl,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -7,12 +8,20 @@ import {
 import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
 import { FontAwesome } from "@expo/vector-icons";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useKeyboardHandler } from "react-native-keyboard-controller";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { Chat, GoogleGenAI } from "@google/genai";
+import JumpingCirclesSameSize from "@/components/JumpinDots";
+
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  date: string;
+};
 
 const useGradualAnimation = () => {
   const height = useSharedValue(0);
@@ -40,90 +49,34 @@ export default function ChatScreen() {
     };
   }, []);
 
-  const data = [
-    {
-      role: "user",
-      content: "Bonjour, comment ça va ?",
-      date: "2023-10-01T12:00:00Z",
-    },
-    {
-      role: "assistant",
-      content: "Bonjour ! Je vais bien, merci. Et vous ?",
-      date: "2023-10-01T12:00:05Z",
-    },
-    {
-      role: "user",
-      content: "Peux-tu me parler de la météo ?",
-      date: "2023-10-01T12:00:10Z",
-    },
-    {
-      role: "assistant",
-      content: "Bien sûr ! Quelle ville vous intéresse ?",
-      date: "2023-10-01T12:00:15Z",
-    },
-    { role: "user", content: "Paris", date: "2023-10-01T12:00:20Z" },
-    {
-      role: "assistant",
-      content: "La météo à Paris est ensoleillée aujourd'hui.",
-      date: "2023-10-01T12:00:25Z",
-    },
-    {
-      role: "user",
-      content: "Merci !",
-      date: "2023-10-01T12:00:30Z",
-    },
-    {
-      role: "assistant",
-      content: "De rien ! Si vous avez d'autres questions, n'hésitez pas.",
-      date: "2023-10-01T12:00:35Z",
-    },
-    { role: "user", content: "Paris", date: "2023-10-01T12:00:20Z" },
-    {
-      role: "assistant",
-      content: "La météo à Paris est ensoleillée aujourd'hui.",
-      date: "2023-10-01T12:00:25Z",
-    },
-    {
-      role: "user",
-      content: "Merci !",
-      date: "2023-10-01T12:00:30Z",
-    },
-    {
-      role: "assistant",
-      content: "De rien ! Si vous avez d'autres questions, n'hésitez pas.",
-      date: "2023-10-01T12:00:35Z",
-    },
-  ];
-
-  const renderItem = useCallback(
-    ({ item }: any) => (
-      <View style={{ marginVertical: 10 }}>
+  const RenderItem = useCallback(
+    ({ item, date = true, ...props }: any) => (
+      <View style={styles.renderItemContainer} {...props}>
         <View
-          style={{
-            marginRight: item.role === "user" ? 0 : "auto",
-            marginLeft: item.role === "user" ? "auto" : 0,
-            backgroundColor: item.role === "user" ? "#e0f7fa" : "#fff",
-            paddingVertical: 10,
-            paddingHorizontal: 15,
-            marginBottom: 5,
-            maxWidth: "80%",
-            justifyContent: "flex-start",
-            borderWidth: 1,
-            borderColor: "black", // Remplacez Colors.dark.text si nécessaire
-          }}
+          style={[
+            styles.renderItemMessage,
+            {
+              marginRight: item.role === "user" ? 0 : "auto",
+              marginLeft: item.role === "user" ? "auto" : 0,
+              backgroundColor: item.role === "user" ? "#e0f7fa" : "#fff",
+            },
+          ]}
         >
           <Text style={{ fontSize: 16 }}>{item.content}</Text>
         </View>
-        <Text
-          style={{
-            fontSize: 10,
-            color: Colors.dark.text,
-            marginRight: item.role === "user" ? 0 : "auto",
-            marginLeft: item.role === "user" ? "auto" : 0,
-          }}
-        >
-          {new Date(item.date).toLocaleString()}
-        </Text>
+        {date && (
+          <Text
+            style={[
+              styles.renderItemDate,
+              {
+                marginRight: item.role === "user" ? 0 : "auto",
+                marginLeft: item.role === "user" ? "auto" : 0,
+              },
+            ]}
+          >
+            {new Date(item.date).toLocaleString()}
+          </Text>
+        )}
       </View>
     ),
     []
@@ -133,28 +86,83 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState(data);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleSendMessage = () => {
-    const newMessage = {
+  const [chat, setChat] = useState<Chat | null>(null);
+  const [message, setMessage] = useState(""); // Changed from Message[] to Message
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const genAI = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+    });
+
+    const chatSession = genAI.chats.create({
+      model: "gemini-2.0-flash",
+      history: [],
+    });
+    setChat(chatSession);
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setError(null);
+    setMessages([]);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 2000);
+  }, []);
+
+  const handleSendMessage = async () => {
+    setError(null);
+    if (!message.trim() || !chat) return;
+
+    const newMessage: Message = {
       role: "user",
       content: message,
       date: new Date().toISOString(),
     };
-    setMessages([...messages, newMessage]);
+    setMessages((prevMessages) => [...prevMessages, newMessage]);
     setMessage("");
+    setIsLoading(true);
+
+    try {
+      const response = await chat.sendMessage({ message: newMessage.content });
+      if (response.text) {
+        const responseMessage: Message = {
+          role: "assistant",
+          content: response.text,
+          date: new Date().toISOString(),
+        };
+        setMessages((prevMessages) => [...prevMessages, responseMessage]);
+      } else {
+        setError("Aucune réponse reçue.");
+      }
+    } catch (err) {
+      console.error("Erreur Gemini :", err);
+      setError("Une erreur s'est produite.");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const invertedMessages = [...messages].reverse();
 
   return (
     <View style={styles.container}>
+      {!process.env.GEMINI_API_KEY && (
+        <Text style={styles.errorText}>
+          Veuillez définir la clé API dans le fichier .env
+        </Text>
+      )}
       <FlatList
+        inverted
         ref={flatListRef}
-        data={messages}
+        data={invertedMessages} // Inverser les messages pour afficher le plus récent en bas
         style={styles.list}
-        renderItem={renderItem}
+        renderItem={RenderItem}
         keyExtractor={(item, index) => index.toString()}
         showsVerticalScrollIndicator={true}
         keyboardDismissMode="on-drag"
@@ -181,7 +189,26 @@ export default function ChatScreen() {
           flatListRef.current?.scrollToEnd({ animated: true });
         }}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
+      {isLoading && (
+        <View
+          style={[
+            styles.renderItemMessage,
+            {
+              marginHorizontal: 20,
+              marginBottom: 10,
+              paddingTop: 24,
+              backgroundColor: "#fff",
+            },
+          ]}
+        >
+          <JumpingCirclesSameSize />
+        </View>
+      )}
+      {error && <Text style={styles.errorText}>{error}</Text>}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -232,5 +259,27 @@ const styles = StyleSheet.create({
     width: 60,
     justifyContent: "center",
     alignItems: "center",
+  },
+  errorText: {
+    color: "red",
+    textAlign: "center",
+    marginVertical: 10,
+  },
+  renderItemContainer: {
+    marginVertical: 10,
+  },
+  renderItemMessage: {
+    marginRight: "auto",
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    marginBottom: 5,
+    maxWidth: "80%",
+    justifyContent: "flex-start",
+    borderWidth: 1,
+    borderColor: "black", // Remplacez Colors.dark.text si nécessaire
+  },
+  renderItemDate: {
+    fontSize: 10,
+    color: Colors.dark.text,
   },
 });
