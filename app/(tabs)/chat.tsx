@@ -15,7 +15,9 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { Chat, GoogleGenAI } from "@google/genai";
+import { GEMINI_API_KEY } from "@/lib/env";
 import JumpingCirclesSameSize from "@/components/JumpinDots";
+// import JumpingCirclesSameSize from "@/components/JumpinDots";
 
 type Message = {
   role: "user" | "assistant";
@@ -38,6 +40,26 @@ const useGradualAnimation = () => {
 
   return { height };
 };
+
+export function createSmsChatSession() {
+  const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+  const chat = genAI.chats.create({
+    model: "gemini-2.0-flash",
+    history: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: "Tu es un assistant intégré dans une application de type messagerie SMS. Tes réponses doivent être courtes, directes, sans politesse excessive ni mise en forme. Va à l'essentiel.",
+          },
+        ],
+      },
+    ],
+  });
+
+  return chat;
+}
 
 export default function ChatScreen() {
   const { height } = useGradualAnimation();
@@ -91,18 +113,15 @@ export default function ChatScreen() {
   const [chat, setChat] = useState<Chat | null>(null);
   const [message, setMessage] = useState(""); // Changed from Message[] to Message
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const genAI = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-    });
+  if (!GEMINI_API_KEY) {
+    console.warn("Aucune clé GEMINI_API_KEY définie");
+  }
 
-    const chatSession = genAI.chats.create({
-      model: "gemini-2.0-flash",
-      history: [],
-    });
+  useEffect(() => {
+    const chatSession = createSmsChatSession();
     setChat(chatSession);
   }, []);
 
@@ -174,19 +193,19 @@ export default function ChatScreen() {
           if (messages.length > 0) {
             setTimeout(() => {
               // Use setTimeout to ensure the scroll happens after the render
-              flatListRef.current?.scrollToEnd({ animated: true });
+              flatListRef.current?.scrollToIndex({ index: 0, animated: true });
             }, 100);
           }
         }}
         onLayout={() => {
           // Scroll to the bottom when the layout changes
           if (isAtBottom && messages.length > 0) {
-            flatListRef.current?.scrollToEnd({ animated: true });
+            flatListRef.current?.scrollToIndex({ index: 0, animated: true });
           }
         }}
         onScrollToIndexFailed={() => {
           // Handle the case when scrolling to an index fails
-          flatListRef.current?.scrollToEnd({ animated: true });
+          flatListRef.current?.scrollToIndex({ index: 0, animated: true });
         }}
         keyboardShouldPersistTaps="handled"
         refreshControl={

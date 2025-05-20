@@ -13,6 +13,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { useColorScheme } from "@/components/useColorScheme";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import Colors from "@/constants/Colors";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -55,9 +56,18 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
+  const MyTheme = {
+    ...(colorScheme === "dark" ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(colorScheme === "dark" ? DarkTheme.colors : DefaultTheme.colors),
+      background: Colors.dark.background,
+      primary: "rgb(255, 45, 85)",
+    },
+  };
+
   return (
     <KeyboardProvider>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={MyTheme}>
         <StatusBar style="dark" />
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

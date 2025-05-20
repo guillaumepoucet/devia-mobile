@@ -63,11 +63,14 @@ export default function TabLayout() {
           fontSize: 12,
           marginBottom: 5,
         },
-
         tabBarIconStyle: {
           marginBottom: 5,
         },
         animation: "shift",
+        sceneStyle: {
+          flex: 1,
+          backgroundColor: Colors[colorScheme ?? "light"].background,
+        },
       }}
     >
       <Tabs.Screen
@@ -123,6 +126,16 @@ export default function TabLayout() {
               </Pressable>
             </Link>
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          title: "Calendrier",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon iconSet="FontAwesome6" name="calendar" color={color} />
+          ),
+          headerShown: false,
         }}
       />
     </Tabs>

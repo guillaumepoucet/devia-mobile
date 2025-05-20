@@ -1,10 +1,9 @@
 import { ScrollView, StyleSheet } from "react-native";
 
 import { Text, View } from "@/components/Themed";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import Svg, { Path } from "react-native-svg";
 import ContainerLayout from "@/components/ContainerLayout";
+import Svg, { Path } from "react-native-svg";
 
 export function CustomGroup() {
   return (
@@ -32,14 +31,12 @@ export function CustomGroup() {
 }
 
 export default function TabOneScreen() {
-  const insets = useSafeAreaInsets();
-
   return (
-    <ScrollView>
-      <ContainerLayout>
-        <View style={{ paddingTop: 40 }} />
-        <View style={{ flex: 0, alignItems: "center", marginVertical: 40 }}>
-          <CustomGroup />
+    <ContainerLayout>
+      <ScrollView>
+        {/* <View style={{ paddingTop: 40 }} /> */}
+        <View style={{ flex: 0, alignItems: "center" }}>
+          {/* <CustomGroup /> */}
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>
@@ -66,15 +63,15 @@ export default function TabOneScreen() {
             </Text>
           </View>
         </View>
-      </ContainerLayout>
-    </ScrollView>
+      </ScrollView>
+    </ContainerLayout>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "flex-start",
+    // justifyContent: "flex-start",
   },
   title: {
     fontFamily: "Glyphic",
